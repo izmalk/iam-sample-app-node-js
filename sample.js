@@ -7,7 +7,7 @@ async function main() {
     console.log("IAM Sample App");
 
     console.log("Connecting to the server");
-    const client = TypeDB.coreClient("0.0.0.0:1729"); // client is connected to the server
+    const client = await TypeDB.coreClient("0.0.0.0:1729"); // client is connected to the server
     console.log("Connecting to the `iam` database");
     let k; // define counter
     let session // define session for later use
