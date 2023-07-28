@@ -2,6 +2,11 @@ const { TypeDB } = require("typedb-client/TypeDB");
 const { SessionType } = require("typedb-client/api/connection/TypeDBSession");
 const { TransactionType } = require("typedb-client/api/connection/TypeDBTransaction");
 const { TypeDBOptions } = require("typedb-client/api/connection/TypeDBOptions");
+const { ThingType } = require("typedb-client/api/concept/type/ThingType");
+//const { Annotation } = ThingType.Annotation;
+//const { Annotation } = require("typedb-client/api/connection/TypeDBOptions");
+//import { Annotation } from 'typedb-client';
+const Annotation = ThingType.Annotation;
 
 async function main() {
     console.log("IAM Sample App");
@@ -79,14 +84,33 @@ async function main() {
                 k++;
                 console.log("File #" + k + ": " + result[i]);
             };
-            match_query = "match $u isa user, has full-name 'Kevin Morrison'; $p($u, $pa) isa permission; $o isa object, has path $fp; $pa($o, $va) isa access; $va isa action, has name 'view_file'; get $fp; sort $fp asc; offset 5; limit 5;"
+            //match_query = "match $u isa user, has full-name 'Kevin Morrison'; $p($u, $pa) isa permission; $o isa object, has path $fp; $pa($o, $va) isa access; $va isa action, has name 'view_file'; get $fp; sort $fp asc; offset 5; limit 5;"
+            match_query = "match $u isa user;"
             iterator = transaction.query.match(match_query); // Executing query
             answers = await iterator.collect();
-            result = await Promise.all(
+            //annotation_set = new Set();
+            //annotation_set.add(ThingType.Annotation.KEY)
+            //annotation_set.add(ThingType.Annotation.KEY)
+            results = await Promise.all(
                 answers.map(answer =>
-                    [answer.map.get("fp").value]
+                    //[answer.map.get("fp").value]
+                    //answer.map.get("u").asThing().asRemote(transaction).getHas(annotations=annotation_set)
+                    //answer.map.get("u")
+                    answer.map.get("u").asThing().asRemote(transaction).getHas([Annotation.KEY])
                 )
             );
+            /*attr = await Promise.all(
+                results(result =>
+                    result.asThing().asRemote(transaction).getHas()
+                )
+
+            );
+
+            for(let i = 0; i < attr.length; i++) {
+            console.log("-->" + attr[i])
+
+            }*/
+
             for(let i = 0; i < result.length; i++) {
                 k++;
                 console.log("File #" + k + ": " + result[i]);

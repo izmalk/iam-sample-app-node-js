@@ -1,5 +1,5 @@
 {
   "dependencies": {
-    "typedb-client": "^2.16.1"
+    "typedb-client": "^2.18.2"
   }
 }
