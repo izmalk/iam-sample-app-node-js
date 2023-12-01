@@ -1,5 +1,5 @@
 {
   "dependencies": {
-    "typedb-client": "^2.18.2"
+    "typedb-driver": "^2.25.7"
   }
 }
