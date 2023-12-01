@@ -7,20 +7,20 @@ async function main() {
     console.log("IAM Sample App");
 
     console.log("Connecting to the server");
-    const client = await TypeDB.coreDriver("0.0.0.0:1729"); // client is connected to the server
+    const driver = await TypeDB.coreDriver("0.0.0.0:1729"); // driver is connected to the server
     console.log("Connecting to the `iam` database");
     let k; // define counter
     let session // define session for later use
     try {
-        session = await client.session("iam", SessionType.DATA); // session is open
+        session = await driver.session("iam", SessionType.DATA); // session is open
 
         console.log("");
         console.log("Request #1: User listing");
         let transaction;
         try {
             transaction = await session.transaction(TransactionType.READ); // READ transaction is open
-            let match_query = "match $u isa user, has full-name $n, has email $e; get;"; // TypeQL query
-            let iterator = transaction.query.get(match_query); // Executing query
+            let get_query = "match $u isa user, has full-name $n, has email $e; get;"; // TypeQL query
+            let iterator = transaction.query.get(get_query); // Executing query
             let answers = await iterator.collect();
             let result = await Promise.all(
                 answers.map(answer =>
@@ -42,8 +42,8 @@ async function main() {
         console.log("Request #2: Files that Kevin Morrison has access to");
         try {
             transaction = await session.transaction(TransactionType.READ); // READ transaction is open
-            match_query = "match $u isa user, has full-name 'Kevin Morrison'; $p($u, $pa) isa permission; $o isa object, has path $fp; $pa($o, $va) isa access; get $fp;";
-            iterator = transaction.query.get(match_query); // Executing query
+            get_query = "match $u isa user, has full-name 'Kevin Morrison'; $p($u, $pa) isa permission; $o isa object, has path $fp; $pa($o, $va) isa access; get $fp;";
+            iterator = transaction.query.get(get_query); // Executing query
             answers = await iterator.collect();
             result = await Promise.all(
                 answers.map(answer =>
@@ -57,7 +57,7 @@ async function main() {
             }
             console.log("Files found: " + k);
         } finally {
-        await transaction.close();
+            await transaction.close();
         };
 
         console.log("");
@@ -66,8 +66,8 @@ async function main() {
         options.infer = true; // set option to enable inference
         try {
             transaction = await session.transaction(TransactionType.READ, options); // READ transaction is open
-            match_query = "match $u isa user, has full-name 'Kevin Morrison'; $p($u, $pa) isa permission; $o isa object, has path $fp; $pa($o, $va) isa access; $va isa action, has name 'view_file'; get $fp; sort $fp asc; offset 0; limit 5;"
-            iterator = transaction.query.get(match_query); // Executing query
+            get_query = "match $u isa user, has full-name 'Kevin Morrison'; $p($u, $pa) isa permission; $o isa object, has path $fp; $pa($o, $va) isa access; $va isa action, has name 'view_file'; get $fp; sort $fp asc; offset 0; limit 5;"
+            iterator = transaction.query.get(get_query); // Executing query
             answers = await iterator.collect();
             result = await Promise.all(
                 answers.map(answer =>
@@ -79,8 +79,8 @@ async function main() {
                 k++;
                 console.log("File #" + k + ": " + result[i]);
             };
-            match_query = "match $u isa user, has full-name 'Kevin Morrison'; $p($u, $pa) isa permission; $o isa object, has path $fp; $pa($o, $va) isa access; $va isa action, has name 'view_file'; get $fp; sort $fp asc; offset 5; limit 5;"
-            iterator = transaction.query.get(match_query); // Executing query
+            get_query = "match $u isa user, has full-name 'Kevin Morrison'; $p($u, $pa) isa permission; $o isa object, has path $fp; $pa($o, $va) isa access; $va isa action, has name 'view_file'; get $fp; sort $fp asc; offset 5; limit 5;"
+            iterator = transaction.query.get(get_query); // Executing query
             answers = await iterator.collect();
             result = await Promise.all(
                 answers.map(answer =>
@@ -110,11 +110,11 @@ async function main() {
             await transaction.query.insert(insert_query); // Executing query
             await transaction.commit(); // to persist changes, a 'write' transaction must be committed
         } finally {
-        if (transaction.isOpen()) {await transaction.close()};
+            if (transaction.isOpen()) {await transaction.close()};
         };
     } finally {
         await session?.close(); // close session
-        client.close(); // close server connection
+        driver.close(); // close server connection
     };
 };
 
