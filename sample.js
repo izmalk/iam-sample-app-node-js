@@ -183,6 +183,24 @@ async function main() {
         } finally {
             if (transaction.isOpen()) {await transaction.close()};
         };
+
+        console.log("");
+        console.log("Request #5: Fetch all files with path that contains logs/");
+        try {
+            transaction = await session.transaction(TransactionType.READ); // Open a transaction to read
+            let fetch_query = "match $f isa file, has path $fp; $fp contains 'logs/'; fetch $f: attribute;";
+            console.log("Fetching files");
+            let iterator = transaction.query.fetch(fetch_query); // Executing the Fetch query
+            let answers = await iterator.collect();
+            k = 0; // reset the counter
+            for(let i = 0; i < answers.length; i++) {
+                k++;
+                console.log("File #" + k + ": " + JSON.stringify(answers[i], null, 4));
+            }
+        } finally {
+            if (transaction.isOpen()) {await transaction.close()};
+        };
+
     } finally {
         await session?.close(); // close session
         driver.close(); // close server connection
