@@ -6,7 +6,7 @@ async function main() {
     const DB_NAME = "people4";
     const SERVER_ADDR = "127.0.0.1:1729";
     const driver = await TypeDB.coreDriver(SERVER_ADDR);
-    if (driver.databases.contains(DB_NAME)) {
+    if (await driver.databases.contains(DB_NAME)) {
         await driver.databases.get(DB_NAME).then(db => db.delete());
     }
     await driver.databases.create(DB_NAME);
