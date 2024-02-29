@@ -3,208 +3,330 @@ const { SessionType } = require("typedb-driver/api/connection/TypeDBSession");
 const { TransactionType } = require("typedb-driver/api/connection/TypeDBTransaction");
 const { TypeDBOptions } = require("typedb-driver/api/connection/TypeDBOptions");
 const { readFile } = require('fs/promises')
+const { prompt } = require('prompt-sync')();
 
 async function main() {
-    const DB_NAME = "iam";
+    const DB_NAME = "sample_app_db";
     const SERVER_ADDR = "127.0.0.1:1729";
-
-    console.log("IAM Sample App");
-
-    console.log("Attempting to connect to a TypeDB Core server: ", SERVER_ADDR);
-    const driver = await TypeDB.coreDriver(SERVER_ADDR); // Connect tot TypeDB Core server
-    if (await driver.databases.contains(DB_NAME)) {
-        console.log("Found a pre-existing database! Re-creating with the default schema and data...");
-        let x = await driver.databases.get(DB_NAME);
-        await x.delete();
-    }
-    console.log("Creating a new DB");
-    await driver.databases.create(DB_NAME);
-    console.log("Created a new DB");
-    if (driver.databases.contains(DB_NAME)) {
-        console.log("Empty database created.");
-    }
-    console.log("Opening a Schema session to define a schema.");
+    let dbReset = false;
     try {
-        session = await driver.session(DB_NAME, SessionType.SCHEMA);
-        try {
-            transaction = await session.transaction(TransactionType.WRITE);
-            try {
-                const define_query = await readFile("iam-schema.tql", 'utf8');
-                await transaction.query.define(define_query);
-                await transaction.commit();
-            }
-            catch (e) {
-                callback(e);
-            }
+        const driver = await TypeDB.coreDriver(SERVER_ADDR);
+        let setup = await dbSetup(driver, DB_NAME, dbReset);
+        if (!setup) {
+            console.log("Terminating...");
+            process.exit(1);
+        } else {
+            console.log("Request 1 of 6: Fetch all users as JSON objects with full names and emails");
+            let users = await fetchAllUsers(driver, DB_NAME);
+
+            let new_name = "Jack Keeper";
+            let new_email = "jk@vaticle.com";
+            console.log(`\nRequest 2 of 6: Add a new user with the full-name ${new_name} and email ${new_email}`);
+            await insertNewUser(driver, DB_NAME, new_name, new_email);
+
+            let name = "Kevin Morrison";
+            console.log(`\nRequest 3 of 6: Find all files that the user ${name} has access to view (no inference)`);
+            let noFiles = await getFilesByUser(driver, DB_NAME, name);
+
+            console.log(`\nRequest 4 of 6: Find all files that the user ${name} has access to view (with inference)`);
+            let files = await getFilesByUser(driver, DB_NAME, name, inference=true);
+
+            old_path = "lzfkn.java";
+            new_path = "lzfkn2.java";
+            console.log(`\nRequest 5 of 6: Update the path of a file from ${old_path} to ${new_path}`);
+            let updated_files = await updateFilepath(driver, DB_NAME, old_path, new_path);
+
+            path = "lzfkn2.java";
+            console.log(`\nRequest 6 of 6: Delete the file with path ${path}`);
+            let deleted = await delete_file(driver, DB_NAME, path);
+
         }
-        finally {
-            if (transaction.isOpen()) {await transaction.close()};
-        }
+    } catch (error) {
+        console.error(error);
     }
-    finally {
-        await session?.close();
-    }
-
-    console.log("Opening a Data session to insert data.");
-    try {
-        session = await driver.session(DB_NAME, SessionType.DATA);
-        try {
-            transaction = await session.transaction(TransactionType.WRITE);
-            const insert_query = await readFile("iam-data-single-query.tql", 'utf8');
-            await transaction.query.insert(insert_query);
-            await transaction.commit();
-        }
-        finally {
-            if (transaction.isOpen()) {await transaction.close()};
-        }
-        console.log("Testing the new database")
-        try {
-            transaction = await session.transaction(TransactionType.READ); // Re-using a session to open a new transaction
-            const test_query = "match $u isa user; get $u; count;";
-            response = await transaction.query.getAggregate(test_query);
-            result = await response.value;
-            if (String(result) === `3`) {
-                console.log("Database setup complete. Test passed.");
-            } else {
-                console.log("Test failed with the following result:", result, " expected result: 3.");
-                process.exit(1);
-            }
-        }
-        finally {
-            if (transaction.isOpen()) {await transaction.close()};
-        }
-    }
-    finally {
-        await session?.close();
-    }
-
-    console.log("Commencing sample requests.");
-    let k; // counter
-    try {
-        session = await driver.session(DB_NAME, SessionType.DATA);
-
-        console.log("");
-        console.log("Request #1: User listing");
-        let transaction;
-        try {
-            transaction = await session.transaction(TransactionType.READ);
-            let get_query = "match $u isa user, has full-name $n, has email $e; get;";
-            let iterator = transaction.query.get(get_query); // Executing the query
-            let answers = await iterator.collect();
-            let result = await Promise.all( // Retrieve results from Promise
-                answers.map(answer =>
-                    [answer.get("n").value,
-                     answer.get("e").value]
-                )
-            );
-            k = 0; // reset the counter
-            for(let i = 0; i < result.length; i++) { // Iterating through the results
-                k++;
-                console.log("User #" + k + ": " + result[i][0] + ", has E-mail: " + result[i][1]);
-            };
-            console.log("Users found: " + k);
-        } finally {
-            transaction?.close();
-        }
-
-        console.log("");
-        console.log("Request #2: Files that Kevin Morrison has access to");
-        try {
-            transaction = await session.transaction(TransactionType.READ);
-            get_query = "match $u isa user, has full-name 'Kevin Morrison'; $p($u, $pa) isa permission; $o isa object, has path $fp; $pa($o, $va) isa access; get $fp;";
-            iterator = transaction.query.get(get_query);
-            answers = await iterator.collect();
-            result = await Promise.all(
-                answers.map(answer =>
-                    [answer.get("fp").value]
-                )
-            );
-            k = 0; // reset the counter
-            for(let i = 0; i < result.length; i++) {
-                k++;
-                console.log("File #" + k + ": " + result[i]);
-            }
-            console.log("Files found: " + k);
-        } finally {
-            await transaction.close();
-        };
-
-        console.log("");
-        console.log("Request #3: Files that Kevin Morrison has view access to (with inference)");
-        let options = new TypeDBOptions();
-        options.infer = true; //Enable inference
-        try {
-            transaction = await session.transaction(TransactionType.READ, options); // set transaction options
-            get_query = "match $u isa user, has full-name 'Kevin Morrison'; $p($u, $pa) isa permission; $o isa object, has path $fp; $pa($o, $va) isa access; $va isa action, has name 'view_file'; get $fp; sort $fp asc; offset 0; limit 5;"
-            // Only the first five results
-            iterator = transaction.query.get(get_query);
-            answers = await iterator.collect();
-            result = await Promise.all(
-                answers.map(answer =>
-                    [answer.get("fp").value]
-                )
-            );
-            k = 0; // reset the counter
-            for(let i = 0; i < result.length; i++) {
-                k++;
-                console.log("File #" + k + ": " + result[i]);
-            };
-            get_query = "match $u isa user, has full-name 'Kevin Morrison'; $p($u, $pa) isa permission; $o isa object, has path $fp; $pa($o, $va) isa access; $va isa action, has name 'view_file'; get $fp; sort $fp asc; offset 5; limit 5;"
-            // The next five results
-            iterator = transaction.query.get(get_query);
-            answers = await iterator.collect();
-            result = await Promise.all(
-                answers.map(answer =>
-                    [answer.get("fp").value]
-                )
-            );
-            for(let i = 0; i < result.length; i++) {
-                k++;
-                console.log("File #" + k + ": " + result[i]);
-            };
-            console.log("Files found: " + k);
-        } finally {
-            await transaction.close();
-        };
-
-        console.log("");
-        console.log("Request #4: Add a new file and a view access to it");
-        const today = new Date(Date.now());
-        try {
-            transaction = await session.transaction(TransactionType.WRITE); // Open a transaction to write
-            let filepath = "logs/" + today.toISOString() + ".log";
-            let insert_query = "insert $f isa file, has path '" + filepath + "';";
-            console.log("Inserting file: " + filepath);
-            transaction.query.insert(insert_query); // Executing the query to insert the file
-            insert_query = "match $f isa file, has path '" + filepath + "'; $vav isa action, has name 'view_file'; insert ($vav, $f) isa access;";
-            console.log("Adding view access to the file");
-            await transaction.query.insert(insert_query); // Executing the second query in the same transaction
-            await transaction.commit(); // commit transaction to persist changes
-        } finally {
-            if (transaction.isOpen()) {await transaction.close()};
-        };
-
-        console.log("");
-        console.log("Request #5: Fetch all files with path that contains logs/");
-        try {
-            transaction = await session.transaction(TransactionType.READ); // Open a transaction to read
-            let fetch_query = "match $f isa file, has path $fp; $fp contains 'logs/'; fetch $f: attribute;";
-            console.log("Fetching files");
-            let iterator = transaction.query.fetch(fetch_query); // Executing the Fetch query
-            let answers = await iterator.collect();
-            k = 0; // reset the counter
-            for(let i = 0; i < answers.length; i++) {
-                k++;
-                console.log("File #" + k + ": " + JSON.stringify(answers[i], null, 4));
-            }
-        } finally {
-            if (transaction.isOpen()) {await transaction.close()};
-        };
-
-    } finally {
-        await session?.close(); // close session
-        driver.close(); // close server connection
-    };
+    process.exit();
 };
+
+async function fetchAllUsers(driver, dbName) {
+    let dataSession = await driver.session(dbName, SessionType.DATA);
+    let users;
+    try {
+        tx = await dataSession.transaction(TransactionType.READ);
+        try {
+            users = await tx.query.fetch("match $u isa user; fetch $u: full-name, email;").collect();
+            for (let i = 0; i < users.length; i++) { 
+                console.log("User #" + (i + 1).toString() + ": " + users[i]["u"]["full-name"][0]["value"]);
+            }
+        } finally {
+            if (tx.isOpen()) {await tx.close()};
+        };
+    } finally {
+        await dataSession?.close();
+    };
+    return users;
+}
+
+async function insertNewUser(driver, dbName, name, email) {
+    let result;
+    let dataSession = await driver.session(dbName, SessionType.DATA);
+    try {
+        tx = await dataSession.transaction(TransactionType.WRITE);
+        try {
+            let response = await tx.query.insert(`insert $p isa person, has full-name $fn, has email $e; $fn == '${name}'; $e == '${email}';`);
+            let answers = await response.collect();
+            result = await Promise.all( // Retrieve results from Promise
+                answers.map(answer =>
+                    [answer.get("fn").value,
+                    answer.get("e").value]
+                )
+            );
+            for(let i = 0; i < result.length; i++) { // Iterating through the results
+                console.log("User inserted: " + result[i][0] + ", has E-mail: " + result[i][1]);
+            };
+            await tx.commit();
+        } finally {
+            if (tx.isOpen()) {await tx.close()};
+        };
+    } finally {
+        await dataSession?.close();
+    };
+    return result;
+}
+
+async function getFilesByUser(driver, dbName, name, inference=false) {
+    let options = new TypeDBOptions();
+    options.infer = inference;
+    let dataSession = await driver.session(dbName, SessionType.DATA);
+    let users;
+    try {
+        tx = await dataSession.transaction(TransactionType.READ, options);
+        try {
+            users = await tx.query.get(`match $u isa user, has full-name '${name}'; get;`).collect();
+            if (users.length > 1) {
+                console.log("Error: Found more than one user with that name.");
+                return null;
+            } else if (users.length == 1) {
+                let response = tx.query.get(`match
+                                            $fn == '${name}';
+                                            $u isa user, has full-name $fn;
+                                            $p($u, $pa) isa permission;
+                                            $o isa object, has path $fp;
+                                            $pa($o, $va) isa access;
+                                            $va isa action, has name 'view_file';
+                                            get $fp; sort $fp asc;
+                                            `);
+                answers = await response.collect();
+                result = await Promise.all(
+                    answers.map(answer =>
+                        [answer.get("fp").value]
+                    )
+                );
+                for (let i = 0; i < result.length; i++) { 
+                    console.log("File #" + (i + 1).toString() + ": " + result[i]);
+                }
+                if (answers.length == 0) {
+                    console.log("No files found. Try enabling inference.");
+                return answers
+                }
+            } else {
+                console.log("Error: No users found with that name.");
+                return null;
+            }
+        } finally {
+            if (tx.isOpen()) {await tx.close()};
+        };
+    } finally {
+        await dataSession?.close();
+    };
+    return users;
+}
+
+async function updateFilepath(driver, dbName, oldPath, newPath) {
+    let result;
+    let dataSession = await driver.session(dbName, SessionType.DATA);
+    try {
+        tx = await dataSession.transaction(TransactionType.WRITE);
+        try {
+            let response = await tx.query.update(`
+                                                match
+                                                $f isa file, has path $old_path;
+                                                $old_path = '${oldPath}';
+                                                delete
+                                                $f has $old_path;
+                                                insert
+                                                $f has path $new_path;
+                                                $new_path = '${newPath}';
+                                                `).collect();
+            if (response.length > 0) {
+                await tx.commit();
+                console.log(`Total number of paths updated: ${response.length}.`);
+                return response;
+            } else {
+                console.log("No matched paths: nothing to update.");
+                return null;
+            }
+        } finally {
+            if (tx.isOpen()) {await tx.close()};
+        };
+    } finally {
+        await dataSession?.close();
+    };
+}
+
+async function delete_file(driver, dbName, path) {
+    let result;
+    let dataSession = await driver.session(dbName, SessionType.DATA);
+    try {
+        tx = await dataSession.transaction(TransactionType.WRITE);
+        try {
+            let response = await tx.query.get(`match
+                                                $f isa file, has path '${path}';
+                                                get;`).collect();
+            if (response.length == 1) {
+                await tx.query.delete(`
+                                    match
+                                    $f isa file, has path '${path}';
+                                    delete
+                                    $f isa file;
+                                    `);
+                await tx.commit();
+                console.log("The file has been deleted.");
+                return true;
+            } else if (response.length > 1) {
+                console.log("Matched more than one file with the same path.");
+                console.log("No files were deleted.");
+                await tx.close();
+                return false;
+            } else {
+                console.log(response.length)
+                console.log("No files matched in the database.");
+                console.log("No files were deleted.");
+                await tx.close();
+                return false;
+            }
+        } finally {
+            if (tx.isOpen()) {await tx.close()};
+        };
+    } finally {
+        await dataSession?.close();
+    };
+}
+
+async function dbSetup(driver, dbName, dbReset=false) {
+    console.log(`Setting up the database: ${dbName}`);
+    let newDatabase = await createNewDatabase(driver, dbName, dbReset);
+    if (!driver.databases.contains(dbName)) {
+        console.log("Database creation failed. Terminating...");
+        return false;
+    }
+    let dataLoaded;
+    if (newDatabase) {
+        try {
+            let session = await driver.session(dbName, SessionType.SCHEMA);
+            await dbSchemaSetup(session);
+            await session.close();
+            session = await driver.session(dbName, SessionType.DATA);
+            await dbDatasetSetup(session);
+            dataLoaded = true;
+        } catch (error) { console.error(error); }
+    }
+    if (dataLoaded || !newDatabase) {
+        try {
+            let session = await driver.session(dbName, SessionType.DATA);
+            return await testInitialDatabase(session)
+        } catch (error) { console.error(error); }
+    }
+}
+
+async function dbSchemaSetup(schemaSession) {
+    process.stdout.write("Defining schema...");
+    try {
+        tx = await schemaSession.transaction(TransactionType.WRITE);
+        try {
+            const define_query = await readFile("iam-schema.tql", 'utf8');
+            await tx.query.define(define_query);
+            await tx.commit();
+            console.log("OK");
+            return true;
+        }
+        catch (e) {
+            callback(e);
+            return false;
+        }
+    }
+    finally {
+        if (tx.isOpen()) {await tx.close()};
+    }
+}
+
+async function dbDatasetSetup(dataSession) {
+    process.stdout.write("Loading data...");
+    try {
+        tx = await dataSession.transaction(TransactionType.WRITE);
+        try {
+            const insert_query = await readFile("iam-data-single-query.tql", 'utf8');
+            await tx.query.insert(insert_query);
+            await tx.commit();
+            console.log("OK");
+        }
+        catch (e) {
+            callback(e);
+        }
+    }
+    finally {
+        if (tx.isOpen()) {await tx.close()};
+    }
+}
+
+async function testInitialDatabase(dataSession) {
+    process.stdout.write("Testing the database...");
+    try {
+        tx = await dataSession.transaction(TransactionType.READ);
+        try {
+            const test_query = "match $u isa user; get $u; count;";
+            let response = await tx.query.getAggregate(test_query);
+            let result = await response.asValue().asLong();
+            if (result == 3) {
+                console.log("Passed");
+                return true;
+            } else {
+                console.log("Failed with the result: " + result.toString() + " Expected result: 3");
+                return false;
+            }
+        }
+        catch (e) {
+            callback(e);
+        }
+    }
+    finally {
+        if (tx.isOpen()) {await tx.close()};
+    }
+}
+
+async function createNewDatabase(driver, dbName, reset=false) {
+    if (await driver.databases.contains(dbName)) {
+        if (reset) {
+            process.stdout.write("Replacing an existing database...");
+            await (await driver.databases.get(dbName)).delete();
+            //await x.delete();
+            await driver.databases.create(dbName);
+            console.log("OK");
+            return true;
+        } else { // reset = false
+            const prompt = require('prompt-sync')();
+            const input = prompt("Found a pre-existing database. Do you want to replace it? (Y/N) ");
+            if (input.toLowerCase() == "y") {
+                return await createNewDatabase(driver, dbName, true);
+            } else {
+                console.log("Reusing an existing database.");
+                return false;
+            }
+        }
+    } else { // No such database on the server
+        process.stdout.write("Creating a new database...");
+        await driver.databases.create(dbName);
+        console.log("");
+    }
+}
 
 main();
