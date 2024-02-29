@@ -74,13 +74,13 @@ async function insertNewUser(driver, dbName, name, email) {
         try {
             let response = await tx.query.insert(`insert $p isa person, has full-name $fn, has email $e; $fn == '${name}'; $e == '${email}';`);
             let answers = await response.collect();
-            result = await Promise.all( // Retrieve results from Promise
+            result = await Promise.all(
                 answers.map(answer =>
                     [answer.get("fn").value,
                     answer.get("e").value]
                 )
             );
-            for(let i = 0; i < result.length; i++) { // Iterating through the results
+            for(let i = 0; i < result.length; i++) {
                 console.log("User inserted: " + result[i][0] + ", has E-mail: " + result[i][1]);
             };
             await tx.commit();
