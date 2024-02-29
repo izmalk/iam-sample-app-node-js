@@ -3,7 +3,7 @@ const { SessionType } = require("typedb-driver/api/connection/TypeDBSession");
 const { TransactionType } = require("typedb-driver/api/connection/TypeDBTransaction");
 const { TypeDBOptions } = require("typedb-driver/api/connection/TypeDBOptions");
 const { readFile } = require('fs/promises')
-const { prompt } = require('prompt-sync')();
+const prompt = require('prompt-sync')();
 
 async function main() {
     const DB_NAME = "sample_app_db";
@@ -142,7 +142,6 @@ async function getFilesByUser(driver, dbName, name, inference=false) {
 }
 
 async function updateFilepath(driver, dbName, oldPath, newPath) {
-    let result;
     let dataSession = await driver.session(dbName, SessionType.DATA);
     try {
         tx = await dataSession.transaction(TransactionType.WRITE);
@@ -174,7 +173,6 @@ async function updateFilepath(driver, dbName, oldPath, newPath) {
 }
 
 async function delete_file(driver, dbName, path) {
-    let result;
     let dataSession = await driver.session(dbName, SessionType.DATA);
     try {
         tx = await dataSession.transaction(TransactionType.WRITE);
@@ -308,12 +306,10 @@ async function createNewDatabase(driver, dbName, reset=false) {
         if (reset) {
             process.stdout.write("Replacing an existing database...");
             await (await driver.databases.get(dbName)).delete();
-            //await x.delete();
             await driver.databases.create(dbName);
             console.log("OK");
             return true;
         } else { // reset = false
-            const prompt = require('prompt-sync')();
             const input = prompt("Found a pre-existing database. Do you want to replace it? (Y/N) ");
             if (input.toLowerCase() == "y") {
                 return await createNewDatabase(driver, dbName, true);
