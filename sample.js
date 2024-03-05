@@ -1,52 +1,73 @@
+// tag::code[]
+// tag::import[]
 const { TypeDB } = require("typedb-driver/TypeDB");
 const { SessionType } = require("typedb-driver/api/connection/TypeDBSession");
 const { TransactionType } = require("typedb-driver/api/connection/TypeDBTransaction");
 const { TypeDBOptions } = require("typedb-driver/api/connection/TypeDBOptions");
 const { readFile } = require('fs/promises')
 const prompt = require('prompt-sync')();
-
+// end::import[]
+// tag::constants[]
+const DB_NAME = "sample_app_db";
+const SERVER_ADDR = "127.0.0.1:1729";
+let dbReset = false;
+let typedbEdition = "core"; // "cloud"
+// end::constants[]
+// tag::main[]
 async function main() {
-    const DB_NAME = "sample_app_db";
-    const SERVER_ADDR = "127.0.0.1:1729";
-    let dbReset = false;
     try {
-        const driver = await TypeDB.coreDriver(SERVER_ADDR);
+        const driver = await connectToTypedb(typedbEdition, SERVER_ADDR);
         let setup = await dbSetup(driver, DB_NAME, dbReset);
-        if (!setup) {
+        if (setup) {
+            await queries(driver, DB_NAME);
+        } else {
             console.log("Terminating...");
             process.exit(1);
-        } else {
-            console.log("Request 1 of 6: Fetch all users as JSON objects with full names and emails");
-            let users = await fetchAllUsers(driver, DB_NAME);
-
-            let new_name = "Jack Keeper";
-            let new_email = "jk@vaticle.com";
-            console.log(`\nRequest 2 of 6: Add a new user with the full-name ${new_name} and email ${new_email}`);
-            await insertNewUser(driver, DB_NAME, new_name, new_email);
-
-            let name = "Kevin Morrison";
-            console.log(`\nRequest 3 of 6: Find all files that the user ${name} has access to view (no inference)`);
-            let noFiles = await getFilesByUser(driver, DB_NAME, name);
-
-            console.log(`\nRequest 4 of 6: Find all files that the user ${name} has access to view (with inference)`);
-            let files = await getFilesByUser(driver, DB_NAME, name, inference=true);
-
-            old_path = "lzfkn.java";
-            new_path = "lzfkn2.java";
-            console.log(`\nRequest 5 of 6: Update the path of a file from ${old_path} to ${new_path}`);
-            let updated_files = await updateFilepath(driver, DB_NAME, old_path, new_path);
-
-            path = "lzfkn2.java";
-            console.log(`\nRequest 6 of 6: Delete the file with path ${path}`);
-            let deleted = await delete_file(driver, DB_NAME, path);
-
         }
     } catch (error) {
         console.error(error);
     }
     process.exit();
 };
+// end::main[]
+// tag::connection[]
+async function connectToTypedb(edition, addr, username = "admin", password = "password") {
+    if (edition == "core") {
+        return await TypeDB.coreDriver(addr);
+    }
+    if (edition == "cloud") {
+        return await TypeDB.cloudDriver(addr, new TypeDBCredential(username, password));
+    }
+}
+// end::connection[]
+// tag::queries[]
+async function queries(driver, dbName) {
+    console.log("\nRequest 1 of 6: Fetch all users as JSON objects with full names and emails");
+    let users = await fetchAllUsers(driver, dbName);
 
+    let new_name = "Jack Keeper";
+    let new_email = "jk@vaticle.com";
+    console.log(`\nRequest 2 of 6: Add a new user with the full-name ${new_name} and email ${new_email}`);
+    await insertNewUser(driver, dbName, new_name, new_email);
+
+    let name = "Kevin Morrison";
+    console.log(`\nRequest 3 of 6: Find all files that the user ${name} has access to view (no inference)`);
+    let noFiles = await getFilesByUser(driver, dbName, name);
+
+    console.log(`\nRequest 4 of 6: Find all files that the user ${name} has access to view (with inference)`);
+    let files = await getFilesByUser(driver, dbName, name, inference=true);
+
+    old_path = "lzfkn.java";
+    new_path = "lzfkn2.java";
+    console.log(`\nRequest 5 of 6: Update the path of a file from ${old_path} to ${new_path}`);
+    let updated_files = await updateFilepath(driver, dbName, old_path, new_path);
+
+    path = "lzfkn2.java";
+    console.log(`\nRequest 6 of 6: Delete the file with path ${path}`);
+    let deleted = await delete_file(driver, dbName, path);
+}
+// end::queries[]
+// tag::fetch[]
 async function fetchAllUsers(driver, dbName) {
     let dataSession = await driver.session(dbName, SessionType.DATA);
     let users;
@@ -57,15 +78,16 @@ async function fetchAllUsers(driver, dbName) {
             for (let i = 0; i < users.length; i++) { 
                 console.log("User #" + (i + 1).toString() + ": " + users[i]["u"]["full-name"][0]["value"]);
             }
-        } finally {
-            if (tx.isOpen()) {await tx.close()};
-        };
-    } finally {
-        await dataSession?.close();
-    };
+        } 
+        catch (error) { console.error(error); }
+        finally { if (tx.isOpen()) {await tx.close()}; };
+    } 
+    catch (error) { console.error(error); }
+    finally { await dataSession?.close(); };
     return users;
 }
-
+// end::fetch[]
+// tag::insert[]
 async function insertNewUser(driver, dbName, name, email) {
     let result;
     let dataSession = await driver.session(dbName, SessionType.DATA);
@@ -84,15 +106,16 @@ async function insertNewUser(driver, dbName, name, email) {
                 console.log("User inserted: " + result[i][0] + ", has E-mail: " + result[i][1]);
             };
             await tx.commit();
-        } finally {
-            if (tx.isOpen()) {await tx.close()};
-        };
-    } finally {
-        await dataSession?.close();
-    };
+        } 
+        catch (error) { console.error(error); }
+        finally { if (tx.isOpen()) {await tx.close()}; };
+    } 
+    catch (error) { console.error(error); }
+    finally { await dataSession?.close(); };
     return result;
 }
-
+// end::insert[]
+// tag::get[]
 async function getFilesByUser(driver, dbName, name, inference=false) {
     let options = new TypeDBOptions();
     options.infer = inference;
@@ -132,15 +155,16 @@ async function getFilesByUser(driver, dbName, name, inference=false) {
                 console.log("Error: No users found with that name.");
                 return null;
             }
-        } finally {
-            if (tx.isOpen()) {await tx.close()};
-        };
-    } finally {
-        await dataSession?.close();
-    };
+        } 
+        catch (error) { console.error(error); }
+        finally { if (tx.isOpen()) {await tx.close()}; };
+    } 
+    catch (error) { console.error(error); }
+    finally { await dataSession?.close(); };
     return users;
 }
-
+// end::get[]
+// tag::update[]
 async function updateFilepath(driver, dbName, oldPath, newPath) {
     let dataSession = await driver.session(dbName, SessionType.DATA);
     try {
@@ -164,14 +188,15 @@ async function updateFilepath(driver, dbName, oldPath, newPath) {
                 console.log("No matched paths: nothing to update.");
                 return null;
             }
-        } finally {
-            if (tx.isOpen()) {await tx.close()};
-        };
-    } finally {
-        await dataSession?.close();
-    };
+        } 
+        catch (error) { console.error(error); }
+        finally { if (tx.isOpen()) {await tx.close()}; };
+    } 
+    catch (error) { console.error(error); }
+    finally { await dataSession?.close(); };
 }
-
+// end::update[]
+// tag::delete[]
 async function delete_file(driver, dbName, path) {
     let dataSession = await driver.session(dbName, SessionType.DATA);
     try {
@@ -202,14 +227,15 @@ async function delete_file(driver, dbName, path) {
                 await tx.close();
                 return false;
             }
-        } finally {
-            if (tx.isOpen()) {await tx.close()};
-        };
-    } finally {
-        await dataSession?.close();
-    };
+        } 
+        catch (error) { console.error(error); }
+        finally { if (tx.isOpen()) {await tx.close()}; };
+    } 
+    catch (error) { console.error(error); }
+    finally { await dataSession?.close(); };
 }
-
+// end::delete[]
+// tag::db-setup[]
 async function dbSetup(driver, dbName, dbReset=false) {
     console.log(`Setting up the database: ${dbName}`);
     let newDatabase = await createNewDatabase(driver, dbName, dbReset);
@@ -235,7 +261,8 @@ async function dbSetup(driver, dbName, dbReset=false) {
         } catch (error) { console.error(error); }
     }
 }
-
+// end::db-setup[]
+// tag::db-schema-setup[]
 async function dbSchemaSetup(schemaSession) {
     process.stdout.write("Defining schema...");
     try {
@@ -251,12 +278,15 @@ async function dbSchemaSetup(schemaSession) {
             callback(e);
             return false;
         }
+    } 
+    catch (e) {
+        callback(e);
+        return false;
     }
-    finally {
-        if (tx.isOpen()) {await tx.close()};
-    }
+    finally { if (tx.isOpen()) {await tx.close()}; }
 }
-
+// end::db-schema-setup[]
+// tag::db-dataset-setup[]
 async function dbDatasetSetup(dataSession) {
     process.stdout.write("Loading data...");
     try {
@@ -267,15 +297,13 @@ async function dbDatasetSetup(dataSession) {
             await tx.commit();
             console.log("OK");
         }
-        catch (e) {
-            callback(e);
-        }
+        catch (e) { callback(e); }
     }
-    finally {
-        if (tx.isOpen()) {await tx.close()};
-    }
+    catch (e) { callback(e); }
+    finally { if (tx.isOpen()) {await tx.close()}; }
 }
-
+// end::db-dataset-setup[]
+// tag::test-db[]
 async function testInitialDatabase(dataSession) {
     process.stdout.write("Testing the database...");
     try {
@@ -292,37 +320,42 @@ async function testInitialDatabase(dataSession) {
                 return false;
             }
         }
-        catch (e) {
-            callback(e);
-        }
+        catch (e) { callback(e); }
     }
-    finally {
-        if (tx.isOpen()) {await tx.close()};
-    }
+    catch (e) { callback(e); }
+    finally { if (tx.isOpen()) {await tx.close()}; }
 }
-
+// end::test-db[]
+// tag::create_new_db[]
 async function createNewDatabase(driver, dbName, reset=false) {
-    if (await driver.databases.contains(dbName)) {
-        if (reset) {
-            process.stdout.write("Replacing an existing database...");
-            await (await driver.databases.get(dbName)).delete();
-            await driver.databases.create(dbName);
-            console.log("OK");
-            return true;
-        } else { // reset = false
-            const input = prompt("Found a pre-existing database. Do you want to replace it? (Y/N) ");
-            if (input.toLowerCase() == "y") {
-                return await createNewDatabase(driver, dbName, true);
-            } else {
-                console.log("Reusing an existing database.");
-                return false;
+    try {
+        if (await driver.databases.contains(dbName)) {
+            if (reset) {
+                process.stdout.write("Replacing an existing database...");
+                await (await driver.databases.get(dbName)).delete();
+                await driver.databases.create(dbName);
+                console.log("OK");
+                return true;
+            } else { // reset = false
+                const input = prompt("Found a pre-existing database. Do you want to replace it? (Y/N) ");
+                if (input.toLowerCase() == "y") {
+                    return await createNewDatabase(driver, dbName, true);
+                } else {
+                    console.log("Reusing an existing database.");
+                    return false;
+                }
             }
+        } else { // No such database on the server
+            process.stdout.write("Creating a new database...");
+            await driver.databases.create(dbName);
+            console.log("");
+            return true;
         }
-    } else { // No such database on the server
-        process.stdout.write("Creating a new database...");
-        await driver.databases.create(dbName);
-        console.log("");
+    }
+    catch (e) { 
+        callback(e);
+        return false;
     }
 }
-
+// end::create_new_db[]
 main();
