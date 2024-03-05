@@ -254,12 +254,10 @@ async function dbSetup(driver, dbName, dbReset=false) {
             dataLoaded = true;
         } catch (error) { console.error(error); }
     }
-    if (dataLoaded || !newDatabase) {
-        try {
-            let session = await driver.session(dbName, SessionType.DATA);
-            return await testInitialDatabase(session)
-        } catch (error) { console.error(error); }
-    }
+    try {
+        let session = await driver.session(dbName, SessionType.DATA);
+        return await testInitialDatabase(session)
+    } catch (error) { console.error(error); }
 }
 // end::db-setup[]
 // tag::db-schema-setup[]
