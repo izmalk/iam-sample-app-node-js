@@ -18,7 +18,7 @@ const CLOUD_PASSWORD = "password";
 // tag::main[]
 async function main() {
     try {
-        const driver = await connectToTypedb(typedbEdition, SERVER_ADDR);
+        const driver = await connectToTypeDB(typedbEdition, SERVER_ADDR);
         let setup = await dbSetup(driver, DB_NAME, dbReset);
         if (setup) {
             await queries(driver, DB_NAME);
@@ -33,7 +33,7 @@ async function main() {
 };
 // end::main[]
 // tag::connection[]
-async function connectToTypedb(edition, addr, username = CLOUD_USERNAME, password = CLOUD_PASSWORD) {
+async function connectToTypeDB(edition, addr, username = CLOUD_USERNAME, password = CLOUD_PASSWORD) {
     if (edition == "core") {
         return await TypeDB.coreDriver(addr);
     }
@@ -124,7 +124,7 @@ async function getFilesByUser(driver, dbName, name, inference=false) {
     let dataSession = await driver.session(dbName, SessionType.DATA);
     let users;
     try {
-        tx = await dataSession.transaction(TransactionType.READ, options);
+        let tx = await dataSession.transaction(TransactionType.READ, options);
         try {
             users = await tx.query.get(`match $u isa user, has full-name '${name}'; get;`).collect();
             if (users.length > 1) {
@@ -240,26 +240,47 @@ async function delete_file(driver, dbName, path) {
 // tag::db-setup[]
 async function dbSetup(driver, dbName, dbReset=false) {
     console.log(`Setting up the database: ${dbName}`);
-    let isNew = await tryCreateDatabase(driver, dbName, dbReset);
-    if (!driver.databases.contains(dbName)) {
-        console.log("Database creation failed. Terminating...");
-        return false;
-    }
-    if (isNew) {
-        try {
-            let session = await driver.session(dbName, SessionType.SCHEMA);
-            await dbSchemaSetup(session);
-            await session.close();
-            session = await driver.session(dbName, SessionType.DATA);
-            await dbDatasetSetup(session);
-            await session.close();
-        } catch (error) { console.error(error); };
-    }
     try {
-        let session = await driver.session(dbName, SessionType.DATA);
-        let result = await testInitialDatabase(session)
-        await session.close();
-        return result
+        if (await driver.databases.contains(dbName)) {
+            if (dbReset === true) {
+                process.stdout.write("Deleting an existing database...");
+                await (await driver.databases.get(dbName)).delete();
+                console.log("OK");
+                if ((await createDatabase(driver, dbName)) === false) {
+                    console.log("Failed to create a database. Terminating...");
+                    return false;
+                }
+            } else { // dbReset = false
+                const input = prompt("Found a pre-existing database. Do you want to replace it? (Y/N) ");
+                if (input.toLowerCase() == "y") {
+                    process.stdout.write("Deleting an existing database...");
+                    await (await driver.databases.get(dbName)).delete();
+                    console.log("OK");
+                    if ((await createDatabase(driver, dbName)) === false) {
+                        console.log("Failed to create a database. Terminating...");
+                        return false;
+                    }
+                } else {
+                    console.log("Reusing an existing database.");
+                }
+            }
+        } else { // No such database on the server
+            if ((await createDatabase(driver, dbName).resolve) === false) {
+                console.log("Failed to create a database. Terminating...");
+                return false;
+            }
+        }
+        if (await driver.databases.contains(dbName)) {
+            try {
+                let dataSession2 = await driver.session(dbName, SessionType.DATA);
+                let result = await dbCheck(dataSession2);
+                await dataSession2.close();
+                return result;
+            } catch (error) { console.error(error); };
+        } else {
+            console.log("Database not found. Terminating...");
+            return false;
+        }
     } catch (error) { console.error(error); };
 }
 // end::db-setup[]
@@ -305,7 +326,7 @@ async function dbDatasetSetup(dataSession) {
 }
 // end::db-dataset-setup[]
 // tag::test-db[]
-async function testInitialDatabase(dataSession) {
+async function dbCheck(dataSession) {
     process.stdout.write("Testing the database...");
     try {
         tx = await dataSession.transaction(TransactionType.READ);
@@ -328,35 +349,23 @@ async function testInitialDatabase(dataSession) {
 }
 // end::test-db[]
 // tag::create_new_db[]
-async function tryCreateDatabase(driver, dbName, reset=false) {
+async function createDatabase(driver, dbName) {
+    process.stdout.write("Creating a new database...");
+    await driver.databases.create(dbName);
+    console.log("OK");
     try {
-        if (await driver.databases.contains(dbName)) {
-            if (reset) {
-                process.stdout.write("Replacing an existing database...");
-                await (await driver.databases.get(dbName)).delete();
-                await driver.databases.create(dbName);
-                console.log("OK");
-                return true;
-            } else { // reset = false
-                const input = prompt("Found a pre-existing database. Do you want to replace it? (Y/N) ");
-                if (input.toLowerCase() == "y") {
-                    return await tryCreateDatabase(driver, dbName, true);
-                } else {
-                    console.log("Reusing an existing database.");
-                    return false;
-                }
-            }
-        } else { // No such database on the server
-            process.stdout.write("Creating a new database...");
-            await driver.databases.create(dbName);
-            console.log("");
-            return true;
+        {   
+            let session = await driver.session(dbName, SessionType.SCHEMA);
+            await dbSchemaSetup(session);
+            await session.close();
         }
-    }
-    catch (e) { 
-        callback(e);
-        return false;
-    }
+        {
+            let session = await driver.session(dbName, SessionType.DATA);
+            await dbDatasetSetup(session);
+            await session.close();
+        }
+    } catch (error) { console.error(error); };
+    return true;
 }
 // end::create_new_db[]
 main();
