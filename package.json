@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "typedb-driver": "^2.25.7"
+    "prompt-sync": "^4.2.0",
+    "typedb-driver": "^2.26.5"
   }
 }
