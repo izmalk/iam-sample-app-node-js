@@ -74,7 +74,7 @@ async function fetchAllUsers(driver, dbName) {
     let dataSession = await driver.session(dbName, SessionType.DATA);
     let users;
     try {
-        tx = await dataSession.transaction(TransactionType.READ);
+        let tx = await dataSession.transaction(TransactionType.READ);
         try {
             users = await tx.query.fetch("match $u isa user; fetch $u: full-name, email;").collect();
             for (let i = 0; i < users.length; i++) { 
@@ -94,7 +94,7 @@ async function insertNewUser(driver, dbName, name, email) {
     let result;
     let dataSession = await driver.session(dbName, SessionType.DATA);
     try {
-        tx = await dataSession.transaction(TransactionType.WRITE);
+        let tx = await dataSession.transaction(TransactionType.WRITE);
         try {
             let response = await tx.query.insert(`insert $p isa person, has full-name $fn, has email $e; $fn == '${name}'; $e == '${email}';`);
             let answers = await response.collect();
@@ -170,7 +170,7 @@ async function getFilesByUser(driver, dbName, name, inference=false) {
 async function updateFilepath(driver, dbName, oldPath, newPath) {
     let dataSession = await driver.session(dbName, SessionType.DATA);
     try {
-        tx = await dataSession.transaction(TransactionType.WRITE);
+        let tx = await dataSession.transaction(TransactionType.WRITE);
         try {
             let response = await tx.query.update(`
                                                 match
@@ -202,7 +202,7 @@ async function updateFilepath(driver, dbName, oldPath, newPath) {
 async function delete_file(driver, dbName, path) {
     let dataSession = await driver.session(dbName, SessionType.DATA);
     try {
-        tx = await dataSession.transaction(TransactionType.WRITE);
+        let tx = await dataSession.transaction(TransactionType.WRITE);
         try {
             let response = await tx.query.get(`match
                                                 $f isa file, has path '${path}';
@@ -280,7 +280,7 @@ async function dbSetup(driver, dbName, dbReset=false) {
 async function dbSchemaSetup(schemaSession) {
     process.stdout.write("Defining schema...");
     try {
-        tx = await schemaSession.transaction(TransactionType.WRITE);
+        let tx = await schemaSession.transaction(TransactionType.WRITE);
         try {
             const define_query = await readFile("iam-schema.tql", 'utf8');
             await tx.query.define(define_query);
@@ -297,14 +297,13 @@ async function dbSchemaSetup(schemaSession) {
         callback(e);
         return false;
     }
-    finally { if (tx.isOpen()) {await tx.close()}; }
 }
 // end::db-schema-setup[]
 // tag::db-dataset-setup[]
 async function dbDatasetSetup(dataSession) {
     process.stdout.write("Loading data...");
     try {
-        tx = await dataSession.transaction(TransactionType.WRITE);
+        let tx = await dataSession.transaction(TransactionType.WRITE);
         try {
             const insert_query = await readFile("iam-data-single-query.tql", 'utf8');
             await tx.query.insert(insert_query);
@@ -314,14 +313,13 @@ async function dbDatasetSetup(dataSession) {
         catch (e) { callback(e); }
     }
     catch (e) { callback(e); }
-    finally { if (tx.isOpen()) {await tx.close()}; }
 }
 // end::db-dataset-setup[]
 // tag::test-db[]
 async function dbCheck(dataSession) {
     process.stdout.write("Testing the database...");
     try {
-        tx = await dataSession.transaction(TransactionType.READ);
+        let tx = await dataSession.transaction(TransactionType.READ);
         try {
             const test_query = "match $u isa user; get $u; count;";
             let response = await tx.query.getAggregate(test_query);
@@ -337,7 +335,6 @@ async function dbCheck(dataSession) {
         catch (e) { callback(e); }
     }
     catch (e) { callback(e); }
-    finally { if (tx.isOpen()) {await tx.close()}; }
 }
 // end::test-db[]
 // tag::create_new_db[]
