@@ -129,6 +129,7 @@ async function getFilesByUser(driver, dbName, name, inference=false) {
             users = await tx.query.get(`match $u isa user, has full-name '${name}'; get;`).collect();
             if (users.length > 1) {
                 console.log("Error: Found more than one user with that name.");
+                await dataSession.close();
                 return null;
             } else if (users.length == 1) {
                 let response = tx.query.get(`match
@@ -155,6 +156,7 @@ async function getFilesByUser(driver, dbName, name, inference=false) {
                 }
             } else {
                 console.log("Error: No users found with that name.");
+                await dataSession.close();
                 return null;
             }
         } 
@@ -185,9 +187,11 @@ async function updateFilepath(driver, dbName, oldPath, newPath) {
             if (response.length > 0) {
                 await tx.commit();
                 console.log(`Total number of paths updated: ${response.length}.`);
+                await dataSession.close();
                 return response;
             } else {
                 console.log("No matched paths: nothing to update.");
+                await dataSession.close();
                 return null;
             }
         } 
@@ -216,17 +220,20 @@ async function delete_file(driver, dbName, path) {
                                     `);
                 await tx.commit();
                 console.log("The file has been deleted.");
+                await dataSession.close();
                 return true;
             } else if (response.length > 1) {
                 console.log("Matched more than one file with the same path.");
                 console.log("No files were deleted.");
                 await tx.close();
+                await dataSession.close();
                 return false;
             } else {
                 console.log(response.length)
                 console.log("No files matched in the database.");
                 console.log("No files were deleted.");
                 await tx.close();
+                await dataSession.close();
                 return false;
             }
         } 
