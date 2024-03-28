@@ -264,9 +264,9 @@ async function dbSetup(driver, dbName, dbReset=false) {
         }
         if (await driver.databases.contains(dbName)) {
             try {
-                let dataSession2 = await driver.session(dbName, SessionType.DATA);
-                let result = await dbCheck(dataSession2);
-                await dataSession2.close();
+                let session = await driver.session(dbName, SessionType.DATA);
+                let result = await dbCheck(session);
+                await session.close();
                 return result;
             } catch (error) { console.error(error); };
         } else {
