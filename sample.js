@@ -243,29 +243,17 @@ async function dbSetup(driver, dbName, dbReset=false) {
     try {
         if (await driver.databases.contains(dbName)) {
             if (dbReset === true) {
-                process.stdout.write("Deleting an existing database...");
-                await (await driver.databases.get(dbName)).delete();
-                console.log("OK");
-                if ((await createDatabase(driver, dbName)) === false) {
-                    console.log("Failed to create a database. Terminating...");
-                    return false;
-                }
+                await replaceDatabase(driver, dbName);
             } else { // dbReset = false
                 const input = prompt("Found a pre-existing database. Do you want to replace it? (Y/N) ");
                 if (input.toLowerCase() == "y") {
-                    process.stdout.write("Deleting an existing database...");
-                    await (await driver.databases.get(dbName)).delete();
-                    console.log("OK");
-                    if ((await createDatabase(driver, dbName)) === false) {
-                        console.log("Failed to create a database. Terminating...");
-                        return false;
-                    }
+                    await replaceDatabase(driver, dbName);
                 } else {
                     console.log("Reusing an existing database.");
                 }
             }
         } else { // No such database on the server
-            if ((await createDatabase(driver, dbName).resolve) === false) {
+            if ((await createDatabase(driver, dbName)) === false) {
                 console.log("Failed to create a database. Terminating...");
                 return false;
             }
@@ -368,4 +356,17 @@ async function createDatabase(driver, dbName) {
     return true;
 }
 // end::create_new_db[]
+// tag::replace_db[]
+async function replaceDatabase(driver, dbName) {
+    process.stdout.write("Deleting an existing database...");
+    await (await driver.databases.get(dbName)).delete();
+    console.log("OK");
+    if ((await createDatabase(driver, dbName)) === true) {
+        return true;
+    } else {
+        console.log("Failed to create a database. Terminating...");
+        return false;
+    }
+}
+// end::replace_db[]
 main();
