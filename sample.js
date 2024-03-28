@@ -243,11 +243,15 @@ async function dbSetup(driver, dbName, dbReset=false) {
     try {
         if (await driver.databases.contains(dbName)) {
             if (dbReset === true) {
-                await replaceDatabase(driver, dbName);
+                if ((await replaceDatabase(driver, dbName)) === false) {
+                    return false;
+                }
             } else { // dbReset = false
                 const input = prompt("Found a pre-existing database. Do you want to replace it? (Y/N) ");
                 if (input.toLowerCase() == "y") {
-                    await replaceDatabase(driver, dbName);
+                    if ((await replaceDatabase(driver, dbName)) === false) {
+                        return false;
+                    }
                 } else {
                     console.log("Reusing an existing database.");
                 }
